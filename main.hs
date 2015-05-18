@@ -1,5 +1,5 @@
 import Sudoku
-import qualified Data.Vector as V
+import qualified Data.Vector.Persistent as V
 
 allBlankSudoku, easySudoku, midSudoku, hardSudoku, evilSudoku :: Sudoku
  

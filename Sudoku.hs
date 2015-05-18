@@ -2,11 +2,14 @@ module Sudoku ( Sudoku (..), solveSudoku, readCell ) where
 
 import Data.Char (intToDigit, digitToInt)
 import Data.Maybe (catMaybes, isNothing)
-import qualified Data.Vector as V
+import qualified Data.Vector.Persistent as V
 import qualified Data.Set as Set
+import Data.Foldable (toList)
 
 (!) :: V.Vector a -> Int -> a
 (!) = V.unsafeIndex
+allV :: (a -> Bool) -> V.Vector a -> Bool
+allV p = V.foldl' (\x y -> x && p y) True
 
 type Block = V.Vector (Maybe Int)
 
@@ -45,18 +48,18 @@ readCell  c  = (Just . digitToInt) c
 isSudoku :: Sudoku -> Bool 
 isSudoku (Sudoku rows) = (V.length rows == 9) && (allOf $ V.map isRow rows) 
   where isRow row = (V.length row == 9) && (allOf $ V.map isCell row) 
-        allOf = V.all (== True)
+        allOf = allV (== True)
         isCell Nothing  = True
         isCell (Just n) = n >= 1 && n <= 9   
 
 isSolved :: Sudoku -> Bool
 isSolved p@(Sudoku s) = 
   (isSudoku p) &&
-  (V.all ((== 9) . V.length) (V.map catMaybesV s))
-    where catMaybesV = V.fromList . catMaybes . V.toList 
+  (allV ((== 9) . V.length) (V.map catMaybesV s))
+    where catMaybesV = V.fromList . catMaybes . toList 
         
 validBlock :: Block -> Bool
-validBlock = noDuplicates . catMaybes . V.toList
+validBlock = noDuplicates . catMaybes . toList
   where noDuplicates l = trackDupes Set.empty l
         trackDupes _  []     = True
         trackDupes ys (x:xs) = if Set.member x ys
@@ -64,7 +67,7 @@ validBlock = noDuplicates . catMaybes . V.toList
                                else trackDupes (Set.insert x ys) xs
 blocks :: Sudoku -> [Block]
 blocks (Sudoku grid) = 
-  let rows    = V.toList grid
+  let rows    = toList grid
       cols    = [V.fromList [grid!r!c | r <- [0..8]] | c <- [0..8]]
       squares = [ V.fromList 
                      [grid!(r+r')!(c+c') | r' <- [-1,0,1], 
@@ -116,9 +119,6 @@ getCellOptions _ _ = map Just [1..9]
 
 cellUpdate :: Sudoku -> (Int, Int) -> Maybe Int -> Sudoku
 cellUpdate (Sudoku rows) (r,c) n = 
-  let enum    = V.zip (V.fromList [0..9]) 
-      newRow  = V.map (\(i, v) -> if i == c then n      else v)  
-                      $ enum (rows!r)   
-      newRows = V.map (\(i, v) -> if i == r then newRow else v)  
-                      $ enum rows
+  let newRow  = V.update c n (rows!r)   
+      newRows = V.update r newRow rows
   in  Sudoku newRows
