@@ -1,11 +1,13 @@
+module Sudoku ( Sudoku (..), solveSudoku, readCell ) where
+
 import Data.Char (intToDigit, digitToInt)
 import Data.Maybe (catMaybes, isNothing)
 import qualified Data.Vector as V
 import qualified Data.Set as Set
-import Debug.Trace
 
 (!) :: V.Vector a -> Int -> a
 (!) = V.unsafeIndex
+
 type Block = V.Vector (Maybe Int)
 
 data Sudoku = Sudoku (V.Vector Block) 
@@ -14,23 +16,23 @@ instance Show Sudoku where
   show (Sudoku rs) = 
     let bufferLine = "+---+---+---+\n"
         lines      = V.map printLine rs
-    in bufferLine ++ (lines ! 0) ++ (lines ! 1) ++ (lines ! 2) ++
-       bufferLine ++ (lines ! 3) ++ (lines ! 4) ++ (lines ! 5) ++
-       bufferLine ++ (lines ! 6) ++ (lines ! 7) ++ (lines ! 8) ++
+    in bufferLine ++ (lines!0) ++ (lines!1) ++ (lines!2) ++
+       bufferLine ++ (lines!3) ++ (lines!4) ++ (lines!5) ++
+       bufferLine ++ (lines!6) ++ (lines!7) ++ (lines!8) ++
        bufferLine 
     where printLine :: Block -> String
           printLine row = 
             let r = V.map cellToChar row 
-            in '|' : (r ! 0) : (r ! 1) : (r ! 2) :
-               '|' : (r ! 3) : (r ! 4) : (r ! 5) :
-               '|' : (r ! 6) : (r ! 7) : (r ! 8) :
+            in '|' : (r!0) : (r!1) : (r!2) :
+               '|' : (r!3) : (r!4) : (r!5) :
+               '|' : (r!6) : (r!7) : (r!8) :
                '|' : '\n' : [] 
   
 {- -                                                                - -}
 {-                       Check Solution                               -}
 {- -                                                                - -}
 isCellChar :: Char -> Bool
-isCellChar c = Prelude.elem  c "123456789."
+isCellChar c = elem  c "123456789."
 
 cellToChar :: Maybe Int -> Char
 cellToChar Nothing  = '.'
@@ -120,65 +122,3 @@ cellUpdate (Sudoku rows) (r,c) n =
       newRows = V.map (\(i, v) -> if i == r then newRow else v)  
                       $ enum rows
   in  Sudoku newRows
-
-{- -                                                                - -}
-
-
-{- -                                                                - -}
-{-                             Sudokus                                -}
-{- -                                                                - -}
-allBlankSudoku, easySudoku, midSudoku, hardSudoku, evilSudoku :: Sudoku
-
-allBlankSudoku = Sudoku $ V.fromList $ replicate 9 $ V.fromList $ replicate 9 Nothing
-
-strList2Sudoku :: [String] -> Sudoku
-strList2Sudoku l = Sudoku $ V.fromList $ 
-                            map (\row -> V.fromList $ map readCell row) l
-
-easySudoku = strList2Sudoku ["3.9....42",
-                             ".189436..",
-                             "......89.",
-                             "..3.9..6.",
-                             "427...589",
-                             ".6..8.2..",
-                             ".72......",
-                             "..457632.",
-                             "63....7.4"]
-
-midSudoku  = strList2Sudoku ["...12..3.",
-                             "..3.8..16",
-                             "4..53..9.",
-                             ".1.8..52.",
-                             ".4.....6.",
-                             ".68..2.7.",
-                             ".8..93..2",
-                             "69..5.3..",
-                             ".3..48..."]
-
-hardSudoku = strList2Sudoku ["6..8.9...",
-                             "..5..7.86",
-                             ".7.......",
-                             "...4.13.7",
-                             "8.1...5.4",
-                             "7.92.5...",
-                             ".......4.",
-                             "18.5..6..",
-                             "...3.4..5"]
-
-evilSudoku = strList2Sudoku ["1........",
-                             "7....81.2",
-                             ".63.5....",
-                             ".7.39....",
-                             "..58.46..",
-                             "....25.4.",
-                             "....1.87.",
-                             "28.9....3",
-                             "........6"]
-{- -                                                                - -}
-
-
-main :: IO ()
-main = putStrLn $ "Easy:\n"   ++ solveSudoku easySudoku ++
-                  "Medium:\n" ++ solveSudoku midSudoku  ++
-                  "Hard:\n"   ++ solveSudoku hardSudoku ++
-                  "Evil:\n"   ++ solveSudoku evilSudoku
