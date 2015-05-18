@@ -1,9 +1,11 @@
 import Data.Char (intToDigit, digitToInt)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isNothing)
 import qualified Data.Vector as V
-import Data.Vector ( (!) ) 
 import qualified Data.Set as Set
+import Debug.Trace
 
+(!) :: V.Vector a -> Int -> a
+(!) = V.unsafeIndex
 type Block = V.Vector (Maybe Int)
 
 data Sudoku = Sudoku (V.Vector Block) 
@@ -79,13 +81,46 @@ validSudoku s = isSolved s && validState s
 {- -                                                                - -}
 {-                          Backtracking                              -}
 {- -                                                                - -}
-{-
-solveSudoku :: Sudoku -> Maybe Sudoku
-solveSudoku s = 
-  if validSudoku s
-  then s
-  else
--}
+solveSudoku :: Sudoku -> String
+solveSudoku s = case recurseSolve s of
+                (Just s) -> show s
+                Nothing  -> "No solution possible :("
+
+recurseSolve :: Sudoku -> Maybe Sudoku
+recurseSolve s = 
+  if   validSudoku s
+  then Just s
+  else 
+    let cell    = getCell s 
+        options = getCellOptions s cell
+    in assign s cell options          
+
+assign :: Sudoku -> (Int, Int) -> [Maybe Int] -> Maybe Sudoku
+assign _ _    []     = Nothing
+assign s cell (n:ns) = 
+  let nextState = cellUpdate s cell n
+  in  if   validState nextState
+      then case recurseSolve nextState of
+           Nothing    -> assign s cell ns
+           s@(Just _) -> s
+      else assign s cell ns 
+       
+getCell :: Sudoku -> (Int, Int)
+getCell (Sudoku rows) = 
+  head [(r,c) | r <- [0..8], c <- [0..8], isNothing (rows!r!c)]
+
+getCellOptions :: Sudoku -> (Int, Int) -> [Maybe Int]
+getCellOptions _ _ = map Just [1..9]
+
+cellUpdate :: Sudoku -> (Int, Int) -> Maybe Int -> Sudoku
+cellUpdate (Sudoku rows) (r,c) n = 
+  let enum    = V.zip (V.fromList [0..9]) 
+      newRow  = V.map (\(i, v) -> if i == c then n      else v)  
+                      $ enum (rows!r)   
+      newRows = V.map (\(i, v) -> if i == r then newRow else v)  
+                      $ enum rows
+  in  Sudoku newRows
+
 {- -                                                                - -}
 
 
@@ -112,7 +147,7 @@ easySudoku = strList2Sudoku ["3.9....42",
 
 midSudoku  = strList2Sudoku ["...12..3.",
                              "..3.8..16",
-                             "4..56..9.",
+                             "4..53..9.",
                              ".1.8..52.",
                              ".4.....6.",
                              ".68..2.7.",
@@ -140,3 +175,10 @@ evilSudoku = strList2Sudoku ["1........",
                              "28.9....3",
                              "........6"]
 {- -                                                                - -}
+
+
+main :: IO ()
+main = putStrLn $ "Easy:\n"   ++ solveSudoku easySudoku ++
+                  "Medium:\n" ++ solveSudoku midSudoku  ++
+                  "Hard:\n"   ++ solveSudoku hardSudoku ++
+                  "Evil:\n"   ++ solveSudoku evilSudoku
