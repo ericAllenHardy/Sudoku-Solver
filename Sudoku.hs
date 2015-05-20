@@ -22,9 +22,9 @@ chunksOf :: Int -> [a] -> [[a]]
 chucksOf _ [] = []
 chunksOf n l  = (take n l) : (chunksOf n $ drop n l)
 
-type Block = V.Vector (Maybe Int)
+type Block = [(Maybe Int)]
 
-data Sudoku = Sudoku (V.Vector Block) 
+data Sudoku = Sudoku (V.Vector (V.Vector (Maybe Int))) 
   deriving (Eq)
 instance Show Sudoku where 
   show (Sudoku rs) = 
@@ -34,7 +34,7 @@ instance Show Sudoku where
        bufferLine ++ (lines!3) ++ (lines!4) ++ (lines!5) ++
        bufferLine ++ (lines!6) ++ (lines!7) ++ (lines!8) ++
        bufferLine 
-    where printLine :: Block -> String
+    where printLine :: V.Vector (Maybe Int) -> String
           printLine row = 
             let r = V.map cellToChar row 
             in '|' : (r!0) : (r!1) : (r!2) :
@@ -144,7 +144,7 @@ isSolved p@(Sudoku s) =
     where catMaybesV = V.fromList . catMaybes . toList 
         
 validBlock :: Block -> Bool
-validBlock = noDuplicates . catMaybes . toList
+validBlock = noDuplicates . catMaybes 
   where noDuplicates l = l == nub l 
                         {-trackDupes Set.empty l
         trackDupes _  []     = True
@@ -153,12 +153,11 @@ validBlock = noDuplicates . catMaybes . toList
                                else trackDupes (Set.insert x ys) xs-}
 blocks :: Sudoku -> [Block]
 blocks (Sudoku grid) = 
-  let rows    = toList grid
-      cols    = [V.fromList [grid!r!c | r <- [0..8]] | c <- [0..8]]
-      squares = [V.fromList 
-                    [grid!(r+r')!(c+c') | r' <- [-1,0,1], 
-                                          c' <- [-1,0,1]]
-                     | r  <- [1,4,7], c  <- [1,4,7] ]
+  let rows    = toList $ V.map toList grid
+      cols    = [[grid!r!c | r <- [0..8]] | c <- [0..8]]
+      squares = [[grid!(r+r')!(c+c') | r' <- [0..2], 
+                                       c' <- [0..2]]
+                 | r  <- [0,3,6], c <- [0,3,6] ]
   in rows ++ cols ++ squares
 
 validState :: Sudoku -> Bool
