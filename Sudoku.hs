@@ -185,7 +185,7 @@ recurseSolve s optGrid =
   then Nothing
   else 
     let cell        = getCell s optGrid 
-        cellOptions = getCellOptions s cell
+        cellOptions = getCellOptions optGrid cell
     in assign s optGrid cell cellOptions         
 
 assign :: Sudoku -> OptionGrid -> (Int, Int) -> [Int] -> Maybe Sudoku
@@ -204,20 +204,15 @@ getCell :: Sudoku -> OptionGrid -> (Int, Int)
 getCell (Sudoku grid) (Grid rows) = 
   let cells   = do r <- [0..8]
                    c <- [0..8]
-                   let o = length $ rows!r!c
-                   guard $ o > 0
                    guard $ isNothing $ grid!r!c
-                   return (r,c,o)
+                   return (r, c, length $ rows!r!c)
       (r,c,_) = minimumBy leastOptions cells 
   in (r,c)
   where 
      leastOptions (r,c,o) (r',c',o') = compare o o'
       
-
-
-
-getCellOptions :: Sudoku -> (Int, Int) -> [Int]
-getCellOptions _ _ = [1..9]
+getCellOptions :: OptionGrid -> (Int, Int) -> [Int]
+getCellOptions (Grid rows) (r,c) = rows!r!c
 
 cellUpdate :: Sudoku -> (Int, Int) -> Maybe Int -> Sudoku
 cellUpdate (Sudoku rows) (r,c) n = 
