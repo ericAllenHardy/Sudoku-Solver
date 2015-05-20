@@ -4,9 +4,10 @@ import Data.Char (intToDigit, digitToInt)
 import Data.Maybe (catMaybes, isNothing, isJust, fromJust)
 import qualified Data.Vector.Persistent as V
 --import qualified Data.Set as Set
-import Data.List (nub)
+import Data.List (nub, minimumBy)
 import Data.Foldable (toList)
 import Control.Monad (guard)
+import Data.Ord (compare)
 
 
 (!) :: V.Vector a -> Int -> a
@@ -154,9 +155,9 @@ blocks :: Sudoku -> [Block]
 blocks (Sudoku grid) = 
   let rows    = toList grid
       cols    = [V.fromList [grid!r!c | r <- [0..8]] | c <- [0..8]]
-      squares = [ V.fromList 
-                     [grid!(r+r')!(c+c') | r' <- [-1,0,1], 
-                                           c' <- [-1,0,1]]
+      squares = [V.fromList 
+                    [grid!(r+r')!(c+c') | r' <- [-1,0,1], 
+                                          c' <- [-1,0,1]]
                      | r  <- [1,4,7], c  <- [1,4,7] ]
   in rows ++ cols ++ squares
 
@@ -183,7 +184,7 @@ recurseSolve s optGrid =
   else if deadEnd optGrid
   then Nothing
   else 
-    let cell        = getCell s 
+    let cell        = getCell s optGrid 
         cellOptions = getCellOptions s cell
     in assign s optGrid cell cellOptions         
 
@@ -199,9 +200,21 @@ assign s optGrid cell (n:ns) =
            s@(Just _) -> s
       else nextAssignment
        
-getCell :: Sudoku -> (Int, Int)
-getCell (Sudoku rows) = 
-  head [(r,c) | r <- [0..8], c <- [0..8], isNothing (rows!r!c)]
+getCell :: Sudoku -> OptionGrid -> (Int, Int)
+getCell (Sudoku grid) (Grid rows) = 
+  let cells   = do r <- [0..8]
+                   c <- [0..8]
+                   let o = length $ rows!r!c
+                   guard $ o > 0
+                   guard $ isNothing $ grid!r!c
+                   return (r,c,o)
+      (r,c,_) = minimumBy leastOptions cells 
+  in (r,c)
+  where 
+     leastOptions (r,c,o) (r',c',o') = compare o o'
+      
+
+
 
 getCellOptions :: Sudoku -> (Int, Int) -> [Int]
 getCellOptions _ _ = [1..9]
