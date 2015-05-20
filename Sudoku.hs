@@ -4,10 +4,13 @@ import Data.Char (intToDigit, digitToInt)
 import Data.Maybe (catMaybes, isNothing, isJust, fromJust)
 import qualified Data.Vector.Persistent as V
 --import qualified Data.Set as Set
-import Data.List (nub, minimumBy)
+import Data.List (nub, minimumBy, partition, null)
 import Data.Foldable (toList)
 import Control.Monad (guard)
 import Data.Ord (compare)
+
+import Debug.Trace
+selfTrace x = traceShow x x 
 
 
 (!) :: V.Vector a -> Int -> a
@@ -116,12 +119,18 @@ optUpdate (Grid rows) (r, c) n =
   in  Grid $ newOpts
   where dropN = dropOption n
 
+cellConstraints :: Sudoku -> (Int, Int) -> [(Int, Int)] 
+cellConstraints (Sudoku grid) (r,c) =
+  let row   = [(c', r) | c' <- [0..8]]
+      col   = [(c ,r') | r' <- [0..(r-2)]++[(r+2)..8]]
+      block = [(c',r') | r' <- map (+ 3*(r `div` 3)) [0, 2],
+                         c' <- map (+ 3*(c `div` 3)) [0..2] ]
+  in [cell | cell@(r,c) <- (row ++ col ++ block), isNothing $ grid!r!c]
+
+
 {- -                                                                - -}
 {-                       Check Solution                               -}
 {- -                                                                - -}
-isCellChar :: Char -> Bool
-isCellChar c = elem  c "123456789."
-
 cellToChar :: Maybe Int -> Char
 cellToChar Nothing  = '.'
 cellToChar (Just n) = intToDigit n
@@ -146,19 +155,15 @@ isSolved p@(Sudoku s) =
 validBlock :: Block -> Bool
 validBlock = noDuplicates . catMaybes . toList
   where noDuplicates l = l == nub l 
-                        {-trackDupes Set.empty l
-        trackDupes _  []     = True
-        trackDupes ys (x:xs) = if Set.member x ys
-                               then False
-                               else trackDupes (Set.insert x ys) xs-}
+
 blocks :: Sudoku -> [Block]
 blocks (Sudoku grid) = 
   let rows    = toList grid
       cols    = [V.fromList [grid!r!c | r <- [0..8]] | c <- [0..8]]
-      squares = [V.fromList 
-                    [grid!(r+r')!(c+c') | r' <- [-1,0,1], 
-                                          c' <- [-1,0,1]]
-                     | r  <- [1,4,7], c  <- [1,4,7] ]
+      squares = [ V.fromList 
+                     [grid!(r+r')!(c+c') | r' <- [0..2], 
+                                           c' <- [0..2]]
+                  | r  <- [0,3,6], c  <- [0,3,6] ]
   in rows ++ cols ++ squares
 
 validState :: Sudoku -> Bool
@@ -185,7 +190,7 @@ recurseSolve s optGrid =
   then Nothing
   else 
     let cell        = getCell s optGrid 
-        cellOptions = getCellOptions s cell
+        cellOptions = getCellOptions optGrid cell
     in assign s optGrid cell cellOptions         
 
 assign :: Sudoku -> OptionGrid -> (Int, Int) -> [Int] -> Maybe Sudoku
@@ -201,23 +206,21 @@ assign s optGrid cell (n:ns) =
       else nextAssignment
        
 getCell :: Sudoku -> OptionGrid -> (Int, Int)
-getCell (Sudoku grid) (Grid rows) = 
-  let cells   = do r <- [0..8]
-                   c <- [0..8]
-                   let o = length $ rows!r!c
-                   guard $ o > 0
-                   guard $ isNothing $ grid!r!c
-                   return (r,c,o)
-      (r,c,_) = minimumBy leastOptions cells 
-  in (r,c)
+getCell s@(Sudoku grid) (Grid rows) = 
+  let cells  = [(r,c, length $ rows!r!c) | r <- [0..8], c <- [0..8],  
+                                           isNothing $ grid!r!c]
+      --cells' = snd . (minimumBy mostConstrained) . groupCells $ cells 
+      (_,_, minFree) = minimumBy mostConstrained cells
+      cells' = foldr (\(r,c,n) xs -> if n == minFree then (r,c):xs else xs) [] cells 
+  in minimumBy (numConstraints s) cells'
   where 
-     leastOptions (r,c,o) (r',c',o') = compare o o'
-      
-
-
-
-getCellOptions :: Sudoku -> (Int, Int) -> [Int]
-getCellOptions _ _ = [1..9]
+    mostConstrained (_,_,n) (_,_,n') = compare n n' 
+    numConstraints s cell cell' = 
+      compare ((length . cellConstraints s) cell) 
+              ((length . cellConstraints s) cell')
+       
+getCellOptions :: OptionGrid -> (Int, Int) -> [Int]
+getCellOptions (Grid rows) (r,c) = rows!r!c
 
 cellUpdate :: Sudoku -> (Int, Int) -> Maybe Int -> Sudoku
 cellUpdate (Sudoku rows) (r,c) n = 
