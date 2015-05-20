@@ -4,7 +4,7 @@ import Data.Char (intToDigit, digitToInt)
 import Data.Maybe (catMaybes, isNothing, isJust, fromJust)
 import qualified Data.Vector.Persistent as V
 --import qualified Data.Set as Set
-import Data.List (nub, minimumBy)
+import Data.List (nub, minimumBy, transpose)
 import Data.Foldable (toList)
 import Control.Monad (guard)
 import Data.Ord (compare)
@@ -154,7 +154,7 @@ validBlock = noDuplicates . catMaybes
 blocks :: Sudoku -> [Block]
 blocks (Sudoku grid) = 
   let rows    = toList $ V.map toList grid
-      cols    = [[grid!r!c | r <- [0..8]] | c <- [0..8]]
+      cols    = transpose rows 
       squares = [[grid!(r+r')!(c+c') | r' <- [0..2], 
                                        c' <- [0..2]]
                  | r  <- [0,3,6], c <- [0,3,6] ]
