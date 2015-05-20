@@ -3,7 +3,8 @@ module Sudoku ( Sudoku (..), solveSudoku, readCell ) where
 import Data.Char (intToDigit, digitToInt)
 import Data.Maybe (catMaybes, isNothing, isJust, fromJust)
 import qualified Data.Vector.Persistent as V
-import qualified Data.Set as Set
+--import qualified Data.Set as Set
+import Data.List (nub)
 import Data.Foldable (toList)
 import Control.Monad (guard)
 
@@ -143,11 +144,12 @@ isSolved p@(Sudoku s) =
         
 validBlock :: Block -> Bool
 validBlock = noDuplicates . catMaybes . toList
-  where noDuplicates l = trackDupes Set.empty l
+  where noDuplicates l = l == nub l 
+                        {-trackDupes Set.empty l
         trackDupes _  []     = True
         trackDupes ys (x:xs) = if Set.member x ys
                                then False
-                               else trackDupes (Set.insert x ys) xs
+                               else trackDupes (Set.insert x ys) xs-}
 blocks :: Sudoku -> [Block]
 blocks (Sudoku grid) = 
   let rows    = toList grid
