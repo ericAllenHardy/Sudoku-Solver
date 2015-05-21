@@ -102,8 +102,7 @@ deadEnd (Grid rows) = anyV (== True) $ V.map (anyV (== [])) rows
 optUpdate :: OptionGrid -> (Int, Int) -> Int -> OptionGrid
 optUpdate (Grid rows) (r, c) n =
   let newRow   = let row = rows!r
-                 in (r, (V.//) row $ (c, [n]):[(c', dropN $ row!c')
-                                               |c' <- [0..(c-1)]++[(c+1)..8]])
+                 in (r, V.update c [n] $ V.map dropN row)
       newCol   = do r' <- [0..(r-2)]++[(r+2)..8]
                     let row = rows!r'
                     return (r', V.update c (dropN $ row!c) row)
@@ -146,18 +145,17 @@ isSolved p@(Sudoku s) =
 validBlock :: Block -> Bool
 validBlock = noDuplicates . catMaybes 
   where noDuplicates l = l == nub l 
-                        {-trackDupes Set.empty l
-        trackDupes _  []     = True
-        trackDupes ys (x:xs) = if Set.member x ys
-                               then False
-                               else trackDupes (Set.insert x ys) xs-}
+
 blocks :: Sudoku -> [Block]
 blocks (Sudoku grid) = 
   let rows    = toList $ V.map toList grid
-      cols    = transpose rows 
-      squares = [[grid!(r+r')!(c+c') | r' <- [0..2], 
-                                       c' <- [0..2]]
-                 | r  <- [0,3,6], c <- [0,3,6] ]
+      cols    = transpose rows
+      squares = let f [] = []
+                    f ((as):(bs):(cs):xs) = (g as bs cs) ++ (f xs) 
+                    g [] [] [] = [] 
+                    g (a1:a2:a3:as) (b1:b2:b3:bs) (c1:c2:c3:cs) =
+                      [a1,a2,a3,b1,b2,b3,c1,c2,c3] : (g as bs cs)
+                in f rows 
   in rows ++ cols ++ squares
 
 validState :: Sudoku -> Bool
@@ -208,7 +206,7 @@ getCell (Sudoku grid) (Grid rows) =
       (r,c,_) = minimumBy leastOptions cells 
   in (r,c)
   where 
-     leastOptions (r,c,o) (r',c',o') = compare o o'
+     leastOptions (_,_,o) (_,_,o') = compare o o'
       
 getCellOptions :: OptionGrid -> (Int, Int) -> [Int]
 getCellOptions (Grid rows) (r,c) = rows!r!c
