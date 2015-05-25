@@ -4,13 +4,13 @@ import Data.Char (intToDigit, digitToInt)
 import Data.Maybe (catMaybes, isNothing, isJust, fromJust)
 import qualified Data.Vector.Persistent as V
 --import qualified Data.Set as Set
-import Data.List (nub, minimumBy, partition, null)
+import Data.List (nub, minimumBy, maximumBy, transpose, partition)
 import Data.Foldable (toList)
 import Control.Monad (guard)
 import Data.Ord (compare)
 
 import Debug.Trace
-selfTrace x = traceShow x x 
+traceSelf x = traceShow x x 
 
 
 (!) :: V.Vector a -> Int -> a
@@ -25,9 +25,9 @@ chunksOf :: Int -> [a] -> [[a]]
 chucksOf _ [] = []
 chunksOf n l  = (take n l) : (chunksOf n $ drop n l)
 
-type Block = V.Vector (Maybe Int)
+type Block = [(Maybe Int)]
 
-data Sudoku = Sudoku (V.Vector Block) 
+data Sudoku = Sudoku (V.Vector (V.Vector (Maybe Int))) 
   deriving (Eq)
 instance Show Sudoku where 
   show (Sudoku rs) = 
@@ -37,7 +37,7 @@ instance Show Sudoku where
        bufferLine ++ (lines!3) ++ (lines!4) ++ (lines!5) ++
        bufferLine ++ (lines!6) ++ (lines!7) ++ (lines!8) ++
        bufferLine 
-    where printLine :: Block -> String
+    where printLine :: V.Vector (Maybe Int) -> String
           printLine row = 
             let r = V.map cellToChar row 
             in '|' : (r!0) : (r!1) : (r!2) :
@@ -105,8 +105,7 @@ deadEnd (Grid rows) = anyV (== True) $ V.map (anyV (== [])) rows
 optUpdate :: OptionGrid -> (Int, Int) -> Int -> OptionGrid
 optUpdate (Grid rows) (r, c) n =
   let newRow   = let row = rows!r
-                 in (r, (V.//) row $ (c, [n]):[(c', dropN $ row!c')
-                                               |c' <- [0..(c-1)]++[(c+1)..8]])
+                 in (r, V.update c [n] $ V.map dropN row)
       newCol   = do r' <- [0..(r-2)]++[(r+2)..8]
                     let row = rows!r'
                     return (r', V.update c (dropN $ row!c) row)
@@ -153,24 +152,44 @@ isSolved p@(Sudoku s) =
     where catMaybesV = V.fromList . catMaybes . toList 
         
 validBlock :: Block -> Bool
-validBlock = noDuplicates . catMaybes . toList
+validBlock = noDuplicates . catMaybes 
   where noDuplicates l = l == nub l 
 
 blocks :: Sudoku -> [Block]
 blocks (Sudoku grid) = 
-  let rows    = toList grid
-      cols    = [V.fromList [grid!r!c | r <- [0..8]] | c <- [0..8]]
-      squares = [ V.fromList 
-                     [grid!(r+r')!(c+c') | r' <- [0..2], 
-                                           c' <- [0..2]]
-                  | r  <- [0,3,6], c  <- [0,3,6] ]
+  let rows    = toList $ V.map toList grid
+      cols    = transpose rows
+      squares = let f [] = []
+                    f ((as):(bs):(cs):xs) = (g as bs cs) ++ (f xs) 
+                    g [] [] [] = [] 
+                    g (a1:a2:a3:as) (b1:b2:b3:bs) (c1:c2:c3:cs) =
+                      [a1,a2,a3,b1,b2,b3,c1,c2,c3] : (g as bs cs)
+                in f rows 
   in rows ++ cols ++ squares
 
 validState :: Sudoku -> Bool
-validState = (all (== True)) . (map validBlock) . blocks
+validState = (all validBlock) . blocks
 
 validSudoku :: Sudoku -> Bool
 validSudoku s = isSolved s && validState s
+
+constraintGrid :: Sudoku -> V.Vector (V.Vector (Int))
+constraintGrid (Sudoku grid) = 
+  let rows, cols, blocks :: V.Vector Int
+      rows   = V.map (V.length . V.filter isNothing) grid
+      cols   = V.fromList . (map (length . filter isNothing)) . transpose $ 
+                 toList $ V.map toList grid
+      blocks = V.fromList $ 
+                 let f [] = []
+                     f ((as):(bs):(cs):xs) = (g as bs cs) ++ (f xs) 
+                     g [] [] [] = [] 
+                     g (a1:a2:a3:as) (b1:b2:b3:bs) (c1:c2:c3:cs) =
+                       [a1,a2,a3,b1,b2,b3,c1,c2,c3] : (g as bs cs)
+                 in (map (length . filter isNothing)) . f $ 
+                    toList $ V.map toList grid
+  in V.fromList . (map V.fromList) $ 
+     [[(rows!r) + (cols!c) + (blocks!(3*(r `div` 3)+(c `div` 3))) 
+      | c <- [0..8]] | r <- [0..8]]
 {- -                                                                - -}
 
 
@@ -195,7 +214,7 @@ recurseSolve s optGrid =
 
 assign :: Sudoku -> OptionGrid -> (Int, Int) -> [Int] -> Maybe Sudoku
 assign _ _       _    []     = Nothing
-assign s optGrid cell (n:ns) = 
+assign s optGrid cell (n:ns) =   
   let nextState  = cellUpdate s cell (Just n)
       newOptGrid = optUpdate optGrid cell n
       nextAssignment = assign s optGrid cell ns
@@ -206,21 +225,24 @@ assign s optGrid cell (n:ns) =
       else nextAssignment
        
 getCell :: Sudoku -> OptionGrid -> (Int, Int)
-getCell s@(Sudoku grid) (Grid rows) = 
-  let cells  = [(r,c, length $ rows!r!c) | r <- [0..8], c <- [0..8],  
-                                           isNothing $ grid!r!c]
-      --cells' = snd . (minimumBy mostConstrained) . groupCells $ cells 
-      (_,_, minFree) = minimumBy mostConstrained cells
-      cells' = foldr (\(r,c,n) xs -> if n == minFree then (r,c):xs else xs) [] cells 
-  in minimumBy (numConstraints s) cells'
+getCell s@(Sudoku grid) (Grid rows) =  
+  let freeCells = do r <- [0..8]
+                     c <- [0..8]
+                     guard $ isNothing (grid!r!c)
+                     return (r, c, length $ rows!r!c)
+      (_,_,minFree) = minimumBy leastOptions freeCells --most constrained variable
+      (r,c,_) = maximumBy mostConstraining $ 
+                filter (\(_,_,o') -> o' == minFree) freeCells 
+      --(r,c,_) = minimumBy leastOptions freeCells
+  in (r,c)
   where 
-    mostConstrained (_,_,n) (_,_,n') = compare n n' 
-    numConstraints s cell cell' = 
-      compare ((length . cellConstraints s) cell) 
-              ((length . cellConstraints s) cell')
-       
+     leastOptions (_,_,o) (_,_,o') = compare o o'
+     mostConstraining (r,c,_) (r',c',_) = 
+       let g = constraintGrid s
+       in compare (g!r!c) (g!r!c)  
+      
 getCellOptions :: OptionGrid -> (Int, Int) -> [Int]
-getCellOptions (Grid rows) (r,c) = rows!r!c
+getCellOptions (Grid rows) (r,c) = rows!r!c --least constraining variable
 
 cellUpdate :: Sudoku -> (Int, Int) -> Maybe Int -> Sudoku
 cellUpdate (Sudoku rows) (r,c) n = 
