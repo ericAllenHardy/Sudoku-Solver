@@ -55,5 +55,5 @@ main :: IO ()
 main = putStrLn $ "Easy:\n"   ++ solveSudoku easySudoku ++
                   "Medium:\n" ++ solveSudoku midSudoku  ++
                   "Hard:\n"   ++ solveSudoku hardSudoku ++
-                  "Evil:\n"   ++ solveSudoku evilSudoku
+                  "Evil:\n"   ++ solveSudoku evilSudoku 
 
